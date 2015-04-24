@@ -68,15 +68,148 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 </div>
 <div id="load-data" class="section level2">
 <h2>2. Load data</h2>
-<pre class="r"><code>pml_training &lt;- read.csv(&quot;data/pml-training.csv&quot;)
-pml_testing &lt;- read.csv(&quot;data/pml-testing.csv&quot;)</code></pre>
+<p>The data for this project come from this source: <a href="http://groupware.les.inf.puc-rio.br/har">http://groupware.les.inf.puc-rio.br/har</a>. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.</p>
+<p>The packages used in the report are:</p>
+<pre><code>## Loading required package: lattice
+## Loading required package: ggplot2</code></pre>
+<p>Load the datasets from local. If the datasets don’t exist, download them first.</p>
+<pre class="r"><code># Download the datasets in case they don't exist.
+  if (!file.exists(&quot;data/pml-training.csv&quot;)) {
+  dir.create(&quot;data&quot;)
+  download.file(
+    &quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;,
+    &quot;data/pml-training.csv&quot;)
+}
+if (!file.exists(&quot;data/pml-testing.csv&quot;)) {
+  download.file(
+    &quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;,
+    &quot;data/pml-testing.csv&quot;)
+}</code></pre>
+<pre class="r"><code>pml_training &lt;- read.csv(&quot;data/pml-training.csv&quot;, na.strings=c(&quot;NA&quot;,&quot;#DIV/0!&quot;,&quot;&quot;))
+pml_testing &lt;- read.csv(&quot;data/pml-testing.csv&quot;, na.strings=c(&quot;NA&quot;,&quot;#DIV/0!&quot;,&quot;&quot;))</code></pre>
 </div>
-<div id="cleaning-data" class="section level2">
-<h2>3. Cleaning data</h2>
-<p>The <code>pml_training</code> has 160 variables. Some variables are filled with <code>NA</code>s. From the script below we can get the variables with 90% <code>NA</code>s and drop them from our training dataset.</p>
+<div id="data-cleaning" class="section level2">
+<h2>3. Data cleaning</h2>
+<p>Set seed first.</p>
+<pre class="r"><code>set.seed(10010)</code></pre>
+<p>The <code>pml_training</code> has 160 variables. Some variables are filled with <code>NA</code>s. Pick the variables with 90% <code>NA</code>s and drop them from our training dataset.</p>
 <pre class="r"><code>na_rate &lt;- colSums(is.na(pml_training)) / nrow(pml_training)
 drops &lt;- names(na_rate)[na_rate &gt; 0.9]
 pml_training &lt;- pml_training[, !(names(pml_training) %in% drops)]</code></pre>
+<p>Some variables have near zero variance, drop them as well.</p>
+<pre class="r"><code>pml_training &lt;- pml_training[, !nearZeroVar(pml_training, saveMetrics=TRUE)$nzv]</code></pre>
+<p>Also drop the index, name and time variables. After we get the cleaned data, splist it into training and testing dataset.</p>
+<pre class="r"><code>drop_col_names &lt;- c(&quot;X&quot;, &quot;user_name&quot;, &quot;raw_timestamp_part_1&quot;, &quot;raw_timestamp_part_2&quot;, &quot;cvtd_timestamp&quot;)
+pml_training &lt;- pml_training[, !(names(pml_training) %in% drop_col_names)]
+
+split &lt;- createDataPartition(y=pml_training$classe, p=0.75, list=FALSE)
+split_training &lt;- pml_training[split, ] 
+split_testing &lt;- pml_training[-split, ] </code></pre>
+</div>
+<div id="build-model" class="section level2">
+<h2>4. Build model</h2>
+<div id="setup-cross-validation" class="section level3">
+<h3>4.1. Setup cross validation</h3>
+<p>With the data cleaned, build the decision tress.</p>
+<pre class="r"><code>cv &lt;- trainControl(method = &quot;cv&quot;, number = 5, verboseIter=FALSE , allowParallel=TRUE)</code></pre>
+</div>
+<div id="build-decision-tree" class="section level3">
+<h3>4.2. Build decision tree</h3>
+<p>Build decision tree as folllow:</p>
+<pre class="r"><code>dt &lt;- rpart(classe ~ ., data=split_training, method=&quot;class&quot;)</code></pre>
+<p>Test the model with testing dataset.</p>
+<pre class="r"><code>predict_dt &lt;- predict(dt, split_testing, type = &quot;class&quot;)
+confusionMatrix(predict_dt, split_testing$classe)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1266  199   46   78   25
+##          B   38  519   25   25   18
+##          C   17   57  683  122   68
+##          D   63  124   49  498  103
+##          E   11   50   52   81  687
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.7449          
+##                  95% CI : (0.7325, 0.7571)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.6759          
+##  Mcnemar's Test P-Value : &lt; 2.2e-16       
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9075   0.5469   0.7988   0.6194   0.7625
+## Specificity            0.9008   0.9732   0.9348   0.9173   0.9515
+## Pos Pred Value         0.7844   0.8304   0.7212   0.5950   0.7798
+## Neg Pred Value         0.9608   0.8995   0.9565   0.9248   0.9468
+## Prevalence             0.2845   0.1935   0.1743   0.1639   0.1837
+## Detection Rate         0.2582   0.1058   0.1393   0.1015   0.1401
+## Detection Prevalence   0.3291   0.1274   0.1931   0.1707   0.1796
+## Balanced Accuracy      0.9042   0.7600   0.8668   0.7684   0.8570</code></pre>
+</div>
+<div id="build-random-forest" class="section level3">
+<h3>4.3. Build random forest</h3>
+<p>Build random forest as folllow:</p>
+<pre class="r"><code>rf &lt;- train(classe ~ ., data = split_training, method = &quot;rf&quot;, trControl= cv)</code></pre>
+<pre><code>## Loading required package: randomForest
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.</code></pre>
+<p>Test the model with testing dataset.</p>
+<pre class="r"><code>predict_rf &lt;- predict(rf, split_testing)
+confusionMatrix(predict_rf, split_testing$classe)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1394    3    0    0    0
+##          B    1  942    2    0    2
+##          C    0    3  853    5    0
+##          D    0    1    0  799    0
+##          E    0    0    0    0  899
+## 
+## Overall Statistics
+##                                          
+##                Accuracy : 0.9965         
+##                  95% CI : (0.9945, 0.998)
+##     No Information Rate : 0.2845         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.9956         
+##  Mcnemar's Test P-Value : NA             
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9993   0.9926   0.9977   0.9938   0.9978
+## Specificity            0.9991   0.9987   0.9980   0.9998   1.0000
+## Pos Pred Value         0.9979   0.9947   0.9907   0.9988   1.0000
+## Neg Pred Value         0.9997   0.9982   0.9995   0.9988   0.9995
+## Prevalence             0.2845   0.1935   0.1743   0.1639   0.1837
+## Detection Rate         0.2843   0.1921   0.1739   0.1629   0.1833
+## Detection Prevalence   0.2849   0.1931   0.1756   0.1631   0.1833
+## Balanced Accuracy      0.9992   0.9957   0.9978   0.9968   0.9989</code></pre>
+</div>
+</div>
+<div id="decision" class="section level2">
+<h2>5. Decision</h2>
+<p>The test result above shows that random forest has better performance than random forest.</p>
+<p>Choose random forest to predict the <code>pml_testing</code>.</p>
+<pre class="r"><code>answers &lt;- predict(rf, pml_testing)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)</code></pre>
 </div>
 
 

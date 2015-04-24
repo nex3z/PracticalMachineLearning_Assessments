@@ -12,6 +12,8 @@ Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible t
 
 ## 2. Load data
 
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
 The packages used in the report are:
 ```{r, echo=FALSE}
 library(caret)
@@ -99,7 +101,7 @@ Build random forest as folllow:
 rf <- train(classe ~ ., data = split_training, method = "rf", trControl= cv)
 ```
 
-Test the model with testing dataset
+Test the model with testing dataset.
 ```{r, cache=TRUE}
 predict_rf <- predict(rf, split_testing)
 confusionMatrix(predict_rf, split_testing$classe)
